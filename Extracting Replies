@@ -1,0 +1,66 @@
+#import the required libraries
+
+import pandas as pd
+import numpy as np
+import requests
+import re
+import csv
+import itertools
+
+BEARER_TOKEN = "Bearer Token"
+
+#extract replies using the Twitter recent search endpoint
+#We'll be extracting the first 100 replies first
+
+url = 'https://api.twitter.com/2/tweets/search/recent?query=conversation_id:1380199354850373633&expansions=author_id&max_results=100'
+resp = requests.get(url, headers= {'Authorization': 'Bearer ' + BEARER_TOKEN
+                                     })
+data = resp.json()['data']
+token = "b26v89c19zqg8o3fostqskfewiey8rwbqce8k3gmmu8vx"
+
+#extracting the other replies
+while resp.json()['meta']['next_token']:
+    url = 'https://api.twitter.com/2/tweets/search/recent?query=conversation_id:1380199354850373633&expansions=author_id&max_results=100&next_token={}'.format(token)
+    resp = requests.get(url, headers= {'Authorization': 'Bearer ' + BEARER_TOKEN
+                                 })
+    try:
+        token = resp.json()['meta']['next_token']
+        page_data = resp.json()['data']
+        data.append(page_data)
+    except:
+        print("there are no more replies")
+  
+#The other batch of replies extracted are list of lists, so we
+#need to convert them into a single list
+
+new_data = list(itertools.chain.from_iterable(data[100:]))
+
+replies = []
+
+for profile in new_data:
+    tweet = profile['text']
+    
+    replies.append(tweet)
+
+for profiles in data[0:99]:
+    tweets = profiles['text']
+    
+    replies.append(tweets) 
+    
+#extract mentions from the tweets
+
+def clean_tweet(tweet):
+    tweet = re.sub('@spotifypodcasts', "", tweet)
+    tweet = re.sub('@Spotify', "", tweet)
+    tweet = re.findall("[@]\S+", tweet)
+    return tweet
+
+reply = []
+for tweets in replies:
+    tweet = clean_tweet(tweets)
+    reply.append(tweet)
+    
+reply = list(itertools.chain.from_iterable(reply))
+reply = pd.Series(reply)
+replies = reply.value_counts()
+replies.to_csv('spotify_replies.csv')
